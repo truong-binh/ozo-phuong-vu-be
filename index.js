@@ -30,7 +30,7 @@ app.use(
     keys: [process.env.SESSION_SECRET || 'dev-secret-change-me'],
     maxAge: 24 * 60 * 60 * 1000,
     httpOnly: true,
-    sameSite: secureCookie ? 'none' : 'lax',
+    sameSite: 'lax',
     secure: secureCookie,
   })
 );
