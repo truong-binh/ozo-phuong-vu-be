@@ -1,0 +1,27 @@
+{
+  "name": "web-tool",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "node --watch index.js",
+    "start": "node index.js",
+    "dev:all": "concurrently -n server,client -c blue,green \"npm run dev\" \"npm --prefix ../client run dev\"",
+    "build": "npm --prefix ../client run build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cookie-session": "^2.1.1",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jszip": "^3.10.1",
+    "multer": "^2.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}
