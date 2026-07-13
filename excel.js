@@ -118,13 +118,16 @@ async function injectColumn(xlsxBuffer, opts) {
     }
     if (!sku) return rowFull;
 
-    const val = valuesBySku.get(sku);
-    if (val == null) return rowFull;
+    // Mã có dữ liệu tính toán -> ghi giá trị; mã không có -> điền 0 (thay vì bỏ trống).
+    const raw = valuesBySku.get(sku);
+    const val = raw == null ? 0 : raw;
     const num = xmlNum(val);
     if (num == null) return rowFull;
 
-    usedSku.add(sku);
-    matched.push(sku);
+    if (raw != null) {
+      usedSku.add(sku);
+      matched.push(sku);
+    }
 
     const tRef = targetCol + rowNum;
     let newBody = rowBody;

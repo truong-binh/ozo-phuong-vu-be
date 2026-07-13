@@ -64,6 +64,11 @@ function sendResult(res, result, processRows, valuesBySku, filename) {
   res.send(result.buffer);
 }
 
+// ---- health -------------------------------------------------------------
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok' });
+});
+
 // ---- auth ---------------------------------------------------------------
 app.get('/api/status', (req, res) => {
   res.json({
