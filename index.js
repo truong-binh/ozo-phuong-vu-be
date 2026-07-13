@@ -88,7 +88,6 @@ app.get('/auth/callback', async (req, res) => {
     if (state !== req.session.oauthState) return res.status(400).send('State không khớp');
     const tok = await lark.exchangeCodeForToken(code);
     req.session.token = tok.access_token;
-    req.session.refresh = tok.refresh_token;
     res.redirect(CLIENT_URL);
   } catch (e) {
     res.status(500).send('Đăng nhập Lark lỗi: ' + e.message);
