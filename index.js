@@ -21,14 +21,17 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '2mb' }));
+const isProd = process.env.NODE_ENV === 'production';
+const secureCookie = process.env.COOKIE_SECURE === 'true' || isProd; // Tự động bật secure cookie ở production (Render)
+
 app.use(
   cookieSession({
     name: 'sess',
     keys: [process.env.SESSION_SECRET || 'dev-secret-change-me'],
     maxAge: 24 * 60 * 60 * 1000,
     httpOnly: true,
-    sameSite: 'none',
-    secure: true,
+    sameSite: secureCookie ? 'none' : 'lax',
+    secure: secureCookie,
   })
 );
 
