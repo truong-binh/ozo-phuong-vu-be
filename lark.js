@@ -42,10 +42,10 @@ async function exchangeCodeForToken(code) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.code !== 0 || data.error) {
+  if (!res.ok || (data.code !== undefined && data.code !== 0) || data.error) {
     throw new Error('Lark token error: ' + JSON.stringify(data));
   }
-  return data.data; // Trả về data.data chứa access_token
+  return data; // Lark OAuth v2 token API trả về flat ở root, không nằm trong data.data
 }
 
 async function refreshToken(refresh_token) {
@@ -60,8 +60,8 @@ async function refreshToken(refresh_token) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.code !== 0 || data.error) throw new Error('Lark refresh error: ' + JSON.stringify(data));
-  return data.data; // Trả về data.data chứa access_token
+  if (!res.ok || (data.code !== undefined && data.code !== 0) || data.error) throw new Error('Lark refresh error: ' + JSON.stringify(data));
+  return data; // Lark OAuth v2 token API trả về flat ở root, không nằm trong data.data
 }
 
 async function larkGet(path, token, params) {
