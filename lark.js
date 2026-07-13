@@ -42,10 +42,10 @@ async function exchangeCodeForToken(code) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) {
+  if (!res.ok || data.code !== 0 || data.error) {
     throw new Error('Lark token error: ' + JSON.stringify(data));
   }
-  return data; // { access_token, refresh_token, expires_in, ... }
+  return data.data; // Trả về data.data chứa access_token
 }
 
 async function refreshToken(refresh_token) {
@@ -60,8 +60,8 @@ async function refreshToken(refresh_token) {
     }),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error('Lark refresh error: ' + JSON.stringify(data));
-  return data;
+  if (!res.ok || data.code !== 0 || data.error) throw new Error('Lark refresh error: ' + JSON.stringify(data));
+  return data.data; // Trả về data.data chứa access_token
 }
 
 async function larkGet(path, token, params) {
