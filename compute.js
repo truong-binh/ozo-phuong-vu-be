@@ -45,7 +45,7 @@ function computeValuesBySku(values, cfg) {
     recvCol = 'J',
     statusCol = 'AP',
     processValue = 'On process',
-    monthFilter = null, // "YYYY-MM": chỉ tính dòng có ngày (dateCol) thuộc tháng này
+    monthFilter = null, // "YYYY-MM": LŨY KẾ — tính dòng có ngày (dateCol) <= hết tháng này
     dateCol = 'AL',
   } = cfg;
 
@@ -67,8 +67,11 @@ function computeValuesBySku(values, cfg) {
     if (status !== want) continue; // only "On process"; "Done" skipped
     if (monthFilter) {
       const ym = valueToYM(row[iDate]);
-      if (ym == null) unparsedDates++;
-      if (ym !== monthFilter) continue; // khác tháng (hoặc không đọc được ngày) -> bỏ
+      if (ym == null) {
+        unparsedDates++;
+        continue; // không đọc được ngày -> bỏ (báo về để đối chiếu)
+      }
+      if (ym > monthFilter) continue; // đặt SAU tháng cutoff -> bỏ; <= thì tính (lũy kế)
     }
     const transit = toNum(row[iOrder]) - toNum(row[iRecv]);
     processRows++;
