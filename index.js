@@ -222,6 +222,7 @@ app.get('/api/values', async (req, res) => {
       sheetId = sheets[0].sheetId;
     }
 
+    const month = String(req.query.month || '').trim(); // "YYYY-MM" (rỗng = không lọc tháng)
     const cfg = {
       headerRow: Number(process.env.LARK_HEADER_ROW || 1),
       skuCol: process.env.LARK_SKU_COL || 'B',
@@ -229,13 +230,17 @@ app.get('/api/values', async (req, res) => {
       recvCol: process.env.LARK_RECV_COL || 'J',
       statusCol: process.env.LARK_STATUS_COL || 'AP',
       processValue: process.env.LARK_PROCESS_VALUE || 'On process',
+      monthFilter: month || null,
+      dateCol: process.env.LARK_DATE_COL || 'AL',
     };
     const lastCol = process.env.LARK_LAST_COL || 'BZ';
     const maxRows = Number(process.env.LARK_MAX_ROWS || 5000);
     const range = `${sheetId}!A1:${lastCol}${maxRows}`;
-    const values = await lark.readValues(spreadsheetToken, range, token);
+    // Khi lọc tháng: đọc số gốc để cột ngày (AL) ra serial -> khớp tháng chính xác.
+    const readOpts = month ? { valueRenderOption: 'UnformattedValue' } : {};
+    const values = await lark.readValues(spreadsheetToken, range, token, readOpts);
 
-    const { valuesBySku, processRows } = computeValuesBySku(values, cfg);
+    const { valuesBySku, processRows, unparsedDates } = computeValuesBySku(values, cfg);
 
     // Định dạng TSV cho nút VBA: mỗi dòng "SKU<TAB>số". Dễ đọc, không cần lib JSON.
     if ((req.query.format || '').toLowerCase() === 'tsv') {
@@ -243,6 +248,8 @@ app.get('/api/values', async (req, res) => {
       for (const [sku, v] of valuesBySku) body += sku + '\t' + v + '\n';
       res.setHeader('X-Process-Rows', String(processRows));
       res.setHeader('X-Distinct-Sku', String(valuesBySku.size));
+      res.setHeader('X-Month', month || 'all');
+      res.setHeader('X-Unparsed-Dates', String(unparsedDates || 0));
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       return res.send(body);
     }
@@ -251,7 +258,7 @@ app.get('/api/values', async (req, res) => {
     for (const [sku, v] of valuesBySku) out[sku] = v;
     res.json({
       ok: true,
-      summary: { processRows, distinctSku: valuesBySku.size },
+      summary: { processRows, distinctSku: valuesBySku.size, month: month || 'all', unparsedDates: unparsedDates || 0 },
       targetCol: process.env.EXCEL_TARGET_COL || 'G',
       keyCol: process.env.EXCEL_KEY_COL || 'A',
       firstRow: Number(process.env.EXCEL_FIRST_ROW || 3),

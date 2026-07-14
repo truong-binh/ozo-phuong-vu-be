@@ -153,11 +153,16 @@ async function listSheets(spreadsheetToken, token) {
 }
 
 // Read a rectangular range. `range` like "<sheetId>" or "<sheetId>!A1:Z2000".
-async function readValues(spreadsheetToken, range, token) {
+// opts.valueRenderOption: 'ToString' (mặc định) | 'UnformattedValue' (lấy số gốc,
+// ngày -> serial để lọc tháng chính xác).
+async function readValues(spreadsheetToken, range, token, opts = {}) {
   const data = await larkGet(
     `/open-apis/sheets/v2/spreadsheets/${spreadsheetToken}/values/${encodeURIComponent(range)}`,
     token,
-    { valueRenderOption: 'ToString', dateTimeRenderOption: 'FormattedString' }
+    {
+      valueRenderOption: opts.valueRenderOption || 'ToString',
+      dateTimeRenderOption: opts.dateTimeRenderOption || 'FormattedString',
+    }
   );
   return (data.valueRange && data.valueRange.values) || [];
 }
