@@ -269,6 +269,57 @@ app.get('/api/values', async (req, res) => {
   }
 });
 
+// ---- GRID mode: sao chép TRỌN 1 sheet Lark (vd "Overview") ra Excel --------
+// GET /api/grid?sheet=Overview&format=tsv  (dùng token user như /api/values)
+app.get('/api/grid', async (req, res) => {
+  try {
+    const need = process.env.BUTTON_API_KEY;
+    const got = req.get('x-api-key') || req.query.key;
+    if (!need || got !== need) return res.status(401).json({ error: 'invalid_api_key' });
+
+    const url = req.query.url || process.env.LARK_SHEET_URL;
+    const parsed = lark.parseLarkUrl(url || '');
+    if (!parsed) return res.status(400).json({ error: 'Thiếu/không hợp lệ LARK_SHEET_URL' });
+
+    let token;
+    try {
+      token = await lark.getUserAccessToken();
+    } catch (e) {
+      if (e.notSeeded) return res.status(401).json({ error: 'not_logged_in', hint: e.message });
+      throw e;
+    }
+
+    let spreadsheetToken = parsed.token;
+    if (parsed.kind === 'wiki') {
+      const node = await lark.resolveWikiToSpreadsheet(parsed.token, token);
+      if (node.objType !== 'sheet')
+        return res.status(400).json({ error: 'Link không phải Lark Sheet (là: ' + node.objType + ')' });
+      spreadsheetToken = node.objToken;
+    }
+
+    const wantTitle = String(req.query.sheet || 'Overview').trim().toLowerCase();
+    const sheets = await lark.listSheets(spreadsheetToken, token);
+    let target = sheets.find((s) => String(s.title).trim().toLowerCase() === wantTitle);
+    if (!target && req.query.sheetId) target = sheets.find((s) => s.sheetId === req.query.sheetId);
+    if (!target)
+      return res.status(400).json({ error: 'Không tìm thấy sheet "' + (req.query.sheet || 'Overview') + '"', sheets: sheets.map((s) => s.title) });
+
+    const values = await lark.readValues(spreadsheetToken, target.sheetId, token);
+
+    if ((req.query.format || '').toLowerCase() === 'tsv') {
+      const clean = (v) => String(v == null ? '' : v).replace(/[\t\r\n]+/g, ' ');
+      let body = '';
+      for (const row of values) body += (row || []).map(clean).join('\t') + '\n';
+      res.setHeader('X-Rows', String(values.length));
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.send(body);
+    }
+    res.json({ sheet: target.title, rows: values.length, values });
+  } catch (e) {
+    res.status(500).json({ error: e.message, larkCode: e.larkCode });
+  }
+});
+
 // ---- NO-LOGIN mode: upload an exported Lark sheet (.xlsx/.csv) directly -----
 // multipart: template=<xlsx mẫu>, larkfile=<file export từ Lark>, config=<json>
 app.post(
