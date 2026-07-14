@@ -36,6 +36,38 @@ function valueToYM(v) {
   return null;
 }
 
+// Chuyển 1 giá trị ô ngày -> "YYYY-MM-DD" (hoặc null nếu không đọc được). Dùng cho lũy kế THEO NGÀY.
+function serialToYMD(n) {
+  const ms = Math.round((n - 25569) * 86400 * 1000);
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return null;
+  return (
+    d.getUTCFullYear() +
+    '-' + String(d.getUTCMonth() + 1).padStart(2, '0') +
+    '-' + String(d.getUTCDate()).padStart(2, '0')
+  );
+}
+function valueToYMD(v) {
+  if (v == null || v === '') return null;
+  if (typeof v === 'number') return serialToYMD(v);
+  const s = String(v).trim();
+  if (/^\d+(\.\d+)?$/.test(s)) return serialToYMD(Number(s)); // chuỗi số = serial
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/); // dd/mm/yy hoặc dd/mm/yyyy
+  if (m) {
+    let yr = Number(m[3]);
+    if (yr < 100) yr += 2000;
+    return yr + '-' + String(Number(m[2])).padStart(2, '0') + '-' + String(Number(m[1])).padStart(2, '0');
+  }
+  const d = new Date(s); // fallback: để JS thử
+  if (!isNaN(d.getTime()))
+    return (
+      d.getUTCFullYear() +
+      '-' + String(d.getUTCMonth() + 1).padStart(2, '0') +
+      '-' + String(d.getUTCDate()).padStart(2, '0')
+    );
+  return null;
+}
+
 // values: array of rows (each row = array indexed by column, A=0)
 function computeValuesBySku(values, cfg) {
   const {
@@ -45,7 +77,8 @@ function computeValuesBySku(values, cfg) {
     recvCol = 'J',
     statusCol = 'AP',
     processValue = 'On process',
-    monthFilter = null, // "YYYY-MM": LŨY KẾ — tính dòng có ngày (dateCol) <= hết tháng này
+    monthFilter = null, // "YYYY-MM": LŨY KẾ THÁNG — tính dòng có ngày (dateCol) <= hết tháng này
+    dateFilter = null,  // "YYYY-MM-DD": LŨY KẾ NGÀY — tính dòng có ngày (dateCol) <= đúng ngày này (ưu tiên hơn monthFilter)
     dateCol = 'AL',
   } = cfg;
 
@@ -65,7 +98,16 @@ function computeValuesBySku(values, cfg) {
     if (!sku) continue;
     const status = row[iStatus] != null ? String(row[iStatus]).trim().toLowerCase() : '';
     if (status !== want) continue; // only "On process"; "Done" skipped
-    if (monthFilter) {
+    if (dateFilter) {
+      // LŨY KẾ THEO NGÀY: chỉ lấy dòng có ngày <= đúng ngày cutoff. Vd cutoff 2026-03-12
+      // thì dòng ngày 2026-03-13 bị bỏ.
+      const ymd = valueToYMD(row[iDate]);
+      if (ymd == null) {
+        unparsedDates++;
+        continue; // không đọc được ngày -> bỏ (báo về để đối chiếu)
+      }
+      if (ymd > dateFilter) continue; // ngày SAU cutoff -> bỏ; <= thì tính (lũy kế)
+    } else if (monthFilter) {
       const ym = valueToYM(row[iDate]);
       if (ym == null) {
         unparsedDates++;

@@ -223,6 +223,8 @@ app.get('/api/values', async (req, res) => {
     }
 
     const month = String(req.query.month || '').trim(); // "YYYY-MM" (rỗng = không lọc tháng)
+    const dateRaw = String(req.query.date || '').trim(); // "YYYY-MM-DD": lũy kế theo NGÀY (ưu tiên hơn month)
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : '';
     const cfg = {
       headerRow: Number(process.env.LARK_HEADER_ROW || 1),
       skuCol: process.env.LARK_SKU_COL || 'B',
@@ -231,13 +233,14 @@ app.get('/api/values', async (req, res) => {
       statusCol: process.env.LARK_STATUS_COL || 'AP',
       processValue: process.env.LARK_PROCESS_VALUE || 'On process',
       monthFilter: month || null,
+      dateFilter: date || null,
       dateCol: process.env.LARK_DATE_COL || 'AL',
     };
     const lastCol = process.env.LARK_LAST_COL || 'BZ';
     const maxRows = Number(process.env.LARK_MAX_ROWS || 5000);
     const range = `${sheetId}!A1:${lastCol}${maxRows}`;
-    // Khi lọc tháng: đọc số gốc để cột ngày (AL) ra serial -> khớp tháng chính xác.
-    const readOpts = month ? { valueRenderOption: 'UnformattedValue' } : {};
+    // Khi lọc theo ngày/tháng: đọc số gốc để cột ngày (AL) ra serial -> khớp chính xác.
+    const readOpts = (month || date) ? { valueRenderOption: 'UnformattedValue' } : {};
     const values = await lark.readValues(spreadsheetToken, range, token, readOpts);
 
     const { valuesBySku, processRows, unparsedDates } = computeValuesBySku(values, cfg);
@@ -249,6 +252,7 @@ app.get('/api/values', async (req, res) => {
       res.setHeader('X-Process-Rows', String(processRows));
       res.setHeader('X-Distinct-Sku', String(valuesBySku.size));
       res.setHeader('X-Month', month || 'all');
+      res.setHeader('X-Cutoff-Date', date || 'all');
       res.setHeader('X-Unparsed-Dates', String(unparsedDates || 0));
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       return res.send(body);
@@ -258,7 +262,7 @@ app.get('/api/values', async (req, res) => {
     for (const [sku, v] of valuesBySku) out[sku] = v;
     res.json({
       ok: true,
-      summary: { processRows, distinctSku: valuesBySku.size, month: month || 'all', unparsedDates: unparsedDates || 0 },
+      summary: { processRows, distinctSku: valuesBySku.size, month: month || 'all', cutoffDate: date || 'all', unparsedDates: unparsedDates || 0 },
       targetCol: process.env.EXCEL_TARGET_COL || 'G',
       keyCol: process.env.EXCEL_KEY_COL || 'A',
       firstRow: Number(process.env.EXCEL_FIRST_ROW || 3),
