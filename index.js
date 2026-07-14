@@ -183,6 +183,77 @@ app.post('/api/generate', requireLogin, upload.single('file'), async (req, res) 
   }
 });
 
+// ---- BUTTON mode: trả JSON để nút VBA trong Excel tự ghi vào cột ----------
+// GET /api/values  (dùng tenant_access_token của app, KHÔNG cần user đăng nhập)
+// Bảo vệ bằng API key: gửi qua header "x-api-key" hoặc query ?key=...
+// Sheet Lark + ánh xạ cột lấy từ .env (xem .env.example).
+app.get('/api/values', async (req, res) => {
+  try {
+    const need = process.env.BUTTON_API_KEY;
+    const got = req.get('x-api-key') || req.query.key;
+    if (!need || got !== need) return res.status(401).json({ error: 'invalid_api_key' });
+
+    const url = req.query.url || process.env.LARK_SHEET_URL;
+    const parsed = lark.parseLarkUrl(url || '');
+    if (!parsed) return res.status(400).json({ error: 'Thiếu/không hợp lệ LARK_SHEET_URL' });
+
+    const token = await lark.getTenantToken();
+    let spreadsheetToken = parsed.token;
+    if (parsed.kind === 'wiki') {
+      const node = await lark.resolveWikiToSpreadsheet(parsed.token, token);
+      if (node.objType !== 'sheet')
+        return res.status(400).json({ error: 'Link không phải Lark Sheet (là: ' + node.objType + ')' });
+      spreadsheetToken = node.objToken;
+    }
+
+    // sheetId: ưu tiên query, rồi .env; nếu trống -> lấy sheet đầu tiên.
+    let sheetId = req.query.sheetId || process.env.LARK_SHEET_ID;
+    if (!sheetId) {
+      const sheets = await lark.listSheets(spreadsheetToken, token);
+      if (!sheets.length) return res.status(400).json({ error: 'Spreadsheet không có sheet nào' });
+      sheetId = sheets[0].sheetId;
+    }
+
+    const cfg = {
+      headerRow: Number(process.env.LARK_HEADER_ROW || 1),
+      skuCol: process.env.LARK_SKU_COL || 'B',
+      orderCol: process.env.LARK_ORDER_COL || 'I',
+      recvCol: process.env.LARK_RECV_COL || 'J',
+      statusCol: process.env.LARK_STATUS_COL || 'AP',
+      processValue: process.env.LARK_PROCESS_VALUE || 'On process',
+    };
+    const lastCol = process.env.LARK_LAST_COL || 'BZ';
+    const maxRows = Number(process.env.LARK_MAX_ROWS || 5000);
+    const range = `${sheetId}!A1:${lastCol}${maxRows}`;
+    const values = await lark.readValues(spreadsheetToken, range, token);
+
+    const { valuesBySku, processRows } = computeValuesBySku(values, cfg);
+
+    // Định dạng TSV cho nút VBA: mỗi dòng "SKU<TAB>số". Dễ đọc, không cần lib JSON.
+    if ((req.query.format || '').toLowerCase() === 'tsv') {
+      let body = '';
+      for (const [sku, v] of valuesBySku) body += sku + '\t' + v + '\n';
+      res.setHeader('X-Process-Rows', String(processRows));
+      res.setHeader('X-Distinct-Sku', String(valuesBySku.size));
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      return res.send(body);
+    }
+
+    const out = {};
+    for (const [sku, v] of valuesBySku) out[sku] = v;
+    res.json({
+      ok: true,
+      summary: { processRows, distinctSku: valuesBySku.size },
+      targetCol: process.env.EXCEL_TARGET_COL || 'G',
+      keyCol: process.env.EXCEL_KEY_COL || 'A',
+      firstRow: Number(process.env.EXCEL_FIRST_ROW || 3),
+      values: out,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message, larkCode: e.larkCode });
+  }
+});
+
 // ---- NO-LOGIN mode: upload an exported Lark sheet (.xlsx/.csv) directly -----
 // multipart: template=<xlsx mẫu>, larkfile=<file export từ Lark>, config=<json>
 app.post(

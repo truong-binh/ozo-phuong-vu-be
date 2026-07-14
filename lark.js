@@ -48,6 +48,27 @@ async function exchangeCodeForToken(code) {
   return data; // Lark OAuth v2 token API trả về flat ở root, không nằm trong data.data
 }
 
+// ---- App-level token (no user login) ------------------------------------
+// tenant_access_token cho phép "bấm 1 nút" đọc dữ liệu mà KHÔNG cần đăng nhập
+// user. Điều kiện: admin đã add app (bot) làm cộng tác viên của file sheet.
+let _tenantCache = { token: null, exp: 0 };
+async function getTenantToken() {
+  const now = Date.now();
+  if (_tenantCache.token && now < _tenantCache.exp) return _tenantCache.token;
+  const res = await fetch(`${OPEN_BASE}/open-apis/auth/v3/tenant_access_token/internal`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ app_id: APP_ID, app_secret: APP_SECRET }),
+  });
+  const data = await res.json();
+  if (!res.ok || (data.code !== undefined && data.code !== 0)) {
+    throw new Error('Lark tenant token error: ' + JSON.stringify(data));
+  }
+  // expire tính bằng giây; trừ hao 60s cho an toàn.
+  _tenantCache = { token: data.tenant_access_token, exp: now + (data.expire - 60) * 1000 };
+  return _tenantCache.token;
+}
+
 async function refreshToken(refresh_token) {
   const res = await fetch(`${OPEN_BASE}/open-apis/authen/v2/oauth/token`, {
     method: 'POST',
@@ -125,6 +146,7 @@ module.exports = {
   buildAuthorizeUrl,
   exchangeCodeForToken,
   refreshToken,
+  getTenantToken,
   resolveWikiToSpreadsheet,
   listSheets,
   readValues,
