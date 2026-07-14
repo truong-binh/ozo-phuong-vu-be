@@ -6,6 +6,8 @@
 //   2) Resolve the /wiki/<token> node -> the underlying spreadsheet token
 //   3) List sheets, then read cell values (v2 values API)
 
+const tokenStore = require('./tokenStore');
+
 const OPEN_BASE = process.env.LARK_OPEN_BASE || 'https://open.larksuite.com';
 const ACCOUNTS_BASE = process.env.LARK_ACCOUNTS_BASE || 'https://accounts.larksuite.com';
 
@@ -85,6 +87,35 @@ async function refreshToken(refresh_token) {
   return data; // Lark OAuth v2 token API trả về flat ở root, không nằm trong data.data
 }
 
+// ---- Cách B: user token bền, dùng cho nút Excel (không cần đăng nhập lại) --
+// Lưu access_token trong RAM (thường sống ~2h) để không refresh mỗi lần bấm nút;
+// khi hết hạn thì dùng refresh_token trong tokenStore để lấy cái mới và LƯU LẠI
+// refresh_token vừa xoay.
+let _userCache = { access_token: null, exp: 0 };
+
+// Gọi sau khi user đăng nhập lần đầu (OAuth callback) để "gieo" refresh_token.
+function seedFromLogin(tok) {
+  if (tok.refresh_token) tokenStore.saveRefreshToken(tok.refresh_token);
+  if (tok.access_token) {
+    _userCache = { access_token: tok.access_token, exp: Date.now() + ((tok.expires_in || 3600) - 120) * 1000 };
+  }
+}
+
+async function getUserAccessToken() {
+  const now = Date.now();
+  if (_userCache.access_token && now < _userCache.exp) return _userCache.access_token;
+  const rt = tokenStore.loadRefreshToken();
+  if (!rt) {
+    const e = new Error('Chưa đăng nhập lần đầu — hãy mở web đăng nhập bằng Lark 1 lần.');
+    e.notSeeded = true;
+    throw e;
+  }
+  const data = await refreshToken(rt);
+  _userCache = { access_token: data.access_token, exp: now + ((data.expires_in || 3600) - 120) * 1000 };
+  if (data.refresh_token) tokenStore.saveRefreshToken(data.refresh_token); // token xoay -> lưu đè
+  return _userCache.access_token;
+}
+
 async function larkGet(path, token, params) {
   const url = new URL(OPEN_BASE + path);
   if (params) for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
@@ -147,6 +178,9 @@ module.exports = {
   exchangeCodeForToken,
   refreshToken,
   getTenantToken,
+  seedFromLogin,
+  getUserAccessToken,
+  isSeeded: tokenStore.isSeeded,
   resolveWikiToSpreadsheet,
   listSheets,
   readValues,

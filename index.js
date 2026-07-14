@@ -93,6 +93,7 @@ app.get('/auth/callback', async (req, res) => {
     if (state !== req.session.oauthState) return res.status(400).send('State không khớp');
     const tok = await lark.exchangeCodeForToken(code);
     req.session.token = tok.access_token;
+    lark.seedFromLogin(tok); // Cách B: lưu refresh_token để nút Excel dùng lâu dài
     res.redirect(CLIENT_URL);
   } catch (e) {
     res.status(500).send('Đăng nhập Lark lỗi: ' + e.message);
@@ -197,7 +198,14 @@ app.get('/api/values', async (req, res) => {
     const parsed = lark.parseLarkUrl(url || '');
     if (!parsed) return res.status(400).json({ error: 'Thiếu/không hợp lệ LARK_SHEET_URL' });
 
-    const token = await lark.getTenantToken();
+    // Cách B: đọc bằng quyền của user đã đăng nhập 1 lần (không cần add bot).
+    let token;
+    try {
+      token = await lark.getUserAccessToken();
+    } catch (e) {
+      if (e.notSeeded) return res.status(401).json({ error: 'not_logged_in', hint: e.message });
+      throw e;
+    }
     let spreadsheetToken = parsed.token;
     if (parsed.kind === 'wiki') {
       const node = await lark.resolveWikiToSpreadsheet(parsed.token, token);
