@@ -152,11 +152,11 @@ app.post('/api/generate', requireLogin, upload.single('file'), async (req, res) 
       sheetId,
       lastCol = 'BZ',
       maxRows = 5000,
-      headerRow = 1, // Lark header row (1-based)
+      headerRow = 2, // Lark header row (1-based)
       skuCol, // Lark column letter for SKU
-      orderCol = 'I', // SL đặt
-      recvCol = 'J', // SL nhận
-      statusCol = 'AP', // Tình trạng lô hàng
+      orderCol = 'J', // SL đặt
+      recvCol = 'K', // SL nhận
+      statusCol = 'AQ', // Tình trạng lô hàng
       processValue = 'On process',
       // Excel target:
       targetSheet = 'Tồn kho & Kế hoạch đặt hàng',
@@ -226,15 +226,15 @@ app.get('/api/values', async (req, res) => {
     const dateRaw = String(req.query.date || '').trim(); // "YYYY-MM-DD": lũy kế theo NGÀY (ưu tiên hơn month)
     const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : '';
     const cfg = {
-      headerRow: Number(process.env.LARK_HEADER_ROW || 1),
+      headerRow: Number(process.env.LARK_HEADER_ROW || 2),
       skuCol: process.env.LARK_SKU_COL || 'B',
-      orderCol: process.env.LARK_ORDER_COL || 'I',
-      recvCol: process.env.LARK_RECV_COL || 'J',
-      statusCol: process.env.LARK_STATUS_COL || 'AP',
+      orderCol: process.env.LARK_ORDER_COL || 'J',
+      recvCol: process.env.LARK_RECV_COL || 'K',
+      statusCol: process.env.LARK_STATUS_COL || 'AQ',
       processValue: process.env.LARK_PROCESS_VALUE || 'On process',
       monthFilter: month || null,
       dateFilter: date || null,
-      dateCol: process.env.LARK_DATE_COL || 'AL',
+      dateCol: process.env.LARK_DATE_COL || 'AM',
     };
     const lastCol = process.env.LARK_LAST_COL || 'BZ';
     const maxRows = Number(process.env.LARK_MAX_ROWS || 5000);
